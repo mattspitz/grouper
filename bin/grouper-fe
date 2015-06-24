@@ -11,8 +11,9 @@ import tornado.ioloop
 import tornado.httpserver
 import tornado.web
 
+from grouper import plugin
 from grouper.graph import Graph
-from grouper.models import get_db_engine, Session, load_plugins
+from grouper.models import get_db_engine, Session
 from grouper.util import get_loglevel, get_database_url
 
 import grouper.fe
@@ -82,7 +83,7 @@ def main(argv):
         if not os.path.exists(settings.plugin_dir):
             logging.fatal("Plugin directory does not exist")
             sys.exit(1)
-        load_plugins(settings.plugin_dir)
+        plugin.load_plugins(settings.plugin_dir)
 
     log_level = get_loglevel(args)
     logging.basicConfig(
@@ -126,7 +127,18 @@ def main(argv):
         "Starting application server with %d processes on port %d",
         settings.num_processes, port
     )
-    server = tornado.httpserver.HTTPServer(application)
+
+    def app_wrapper(request):
+        plugins_with_data = []
+        for p in plugin.Plugins:
+            plugins_with_data.append((p, p.start_request(request)))
+
+        application(request)
+
+        for p, data in reversed(plugins_with_data):
+            p.finish_request(request, data)
+
+    server = tornado.httpserver.HTTPServer(app_wrapper)
     server.bind(port)
     server.start(settings.num_processes)
     try:

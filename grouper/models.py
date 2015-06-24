@@ -1,4 +1,3 @@
-from annex import Annex
 from collections import OrderedDict, namedtuple
 from datetime import datetime
 import functools
@@ -20,12 +19,12 @@ from sqlalchemy.orm import aliased
 from sqlalchemy.orm import sessionmaker, Session as _Session
 from sqlalchemy.sql import func, label, literal
 
+from . import plugin
 from .capabilities import Capabilities
 from .constants import (
     ARGUMENT_VALIDATION, PERMISSION_GRANT, PERMISSION_CREATE, MAX_NAME_LENGTH,
     PERMISSION_VALIDATION
 )
-from .plugin import BasePlugin
 
 
 OBJ_TYPES_IDX = ("User", "Group", "Request", "RequestStatusChange")
@@ -129,21 +128,6 @@ Model = declarative_base(cls=Model)
 
 def get_db_engine(url):
     return create_engine(url, pool_recycle=300)
-
-
-Plugins = []
-
-
-class PluginsAlreadyLoaded(Exception):
-    pass
-
-
-def load_plugins(plugin_dir):
-    """Load plugins from a directory"""
-    global Plugins
-    if Plugins:
-        raise PluginsAlreadyLoaded("Plugins already loaded; can't load twice!")
-    Plugins = Annex(BasePlugin, [plugin_dir], raise_exceptions=True)
 
 
 def flush_transaction(method):
@@ -252,8 +236,8 @@ class User(Model):
         return None
 
     def just_created(self):
-        for plugin in Plugins:
-            plugin.user_created(self)
+        for p in plugin.Plugins:
+            p.user_created(self)
 
     def enable(self):
         self.enabled = True
